@@ -42,9 +42,9 @@ from multi_doc import doc_type
 app = FastAPI(title="DengbaoRAG")
 
 # raptor启动
-summary_model = "qwen2.5-72b"
+summary_model = "pangu-7b"
 summary_model_key = cf.llm_models[summary_model]
-qa_model = "qwen3-32b"
+qa_model = "pangu-7b"
 qa_model_key = cf.llm_models[qa_model]
 embedding_model = "bge-m3"
 embedding_model_key = cf.embedding_models[embedding_model]
