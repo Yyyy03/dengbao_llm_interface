@@ -1,204 +1,107 @@
-<!-- <p align="center">
-  <img align="center" src="raptor.jpg" width="1000px" />
-</p>
-<p align="left"> -->
+# DengbaoRAG 接口服务
 
-<!-- <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="raptor.jpg" width="1000px">
-  <source media="(prefers-color-scheme: light)" srcset="raptor_dark.png" width="1000px">
-  
-</picture> -->
+一个面向合规/标准类文档的检索增强服务（FastAPI），支持多文档检索、分层检索、BM25 + 向量融合、重排序与多查询扩展，适合构建企业内部知识库问答或检索型应用。
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="raptor_dark.png">
-  <img alt="Shows an illustrated sun in light color mode and a moon with stars in dark color mode." src="raptor.jpg">
-</picture>
+## 特性概览
 
-## RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval
+- 多文档召回：先选文档，再做细粒度检索
+- 分层检索：按目录/层级结构定位上下文
+- 融合检索：BM25 与向量检索融合去重
+- 重排序：对召回结果进行语义重排
+- 多查询扩展：自动生成子查询提高覆盖率
+- 结构化返回：接口统一输出 `retriever` 列表
 
-**RAPTOR** introduces a novel approach to retrieval-augmented language models by constructing a recursive tree structure from documents. This allows for more efficient and context-aware information retrieval across large texts, addressing common limitations in traditional language models. 
+## 快速开始
 
-
-
-For detailed methodologies and implementations, refer to the original paper:
-
-- [RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval](https://arxiv.org/abs/2401.18059)
-
-[![Paper page](https://huggingface.co/datasets/huggingface/badges/resolve/main/paper-page-sm.svg)](https://huggingface.co/papers/2401.18059)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/raptor-recursive-abstractive-processing-for/question-answering-on-quality)](https://paperswithcode.com/sota/question-answering-on-quality?p=raptor-recursive-abstractive-processing-for)
-
-## Installation
-
-Before using RAPTOR, ensure Python 3.8+ is installed. Clone the RAPTOR repository and install necessary dependencies:
+### 1) 安装依赖
 
 ```bash
-git clone https://github.com/parthsarthi03/raptor.git
-cd raptor
 pip install -r requirements.txt
 ```
 
-## Basic Usage
+### 2) 配置模型与 API Key
 
-To get started with RAPTOR, follow these steps:
+复制配置模板并填写模型与 Key：
 
-### Setting Up RAPTOR
-
-First, set your OpenAI API key and initialize the RAPTOR configuration:
-
-```python
-import os
-os.environ["OPENAI_API_KEY"] = "your-openai-api-key"
-
-from raptor import RetrievalAugmentation
-
-# Initialize with default configuration. For advanced configurations, check the documentation. [WIP]
-RA = RetrievalAugmentation()
+```bash
+cp config.py.example config.py
 ```
 
-### Adding Documents to the Tree
+> `config.py` 中包含 LLM、Embedding、Reranker 的模型名与 Key。
 
-Add your text documents to RAPTOR for indexing:
+### 3) 准备索引与数据
 
-```python
-with open('sample.txt', 'r') as file:
-    text = file.read()
-RA.add_documents(text)
+服务启动时会读取本地索引与分层数据（默认在 `./demo` 下）：
+
+- 树状索引：`./demo/raptor-trees/<doc>`
+- 分层索引：`./demo/fenceng/<doc>`
+- Markdown 文档：`./demo/mds/<doc>.md`
+- 缓存目录：`./demo/token_database`
+
+如果你需要替换/新增文档，请保证对应目录结构与文件命名一致。
+
+### 4) 启动服务
+
+```bash
+python app.py
 ```
 
-### Answering Questions
+默认监听 `0.0.0.0:8000`。
 
-You can now use RAPTOR to answer questions based on the indexed documents:
+## 接口说明
 
-```python
-question = "How did Cinderella reach her happy ending?"
-answer = RA.answer_question(question=question)
-print("Answer: ", answer)
-```
+> 请求体统一为：`{"query": "你的问题"}`
 
-### Saving and Loading the Tree
+- `POST /raptor/22239`
+  - 单文档检索（叶节点 + 路径节点）
+- `POST /fenceng`
+  - 多文档分层检索 + 重排序
+- `POST /retrieve_new`
+  - 多查询扩展 + 多文档融合检索 + 重排序
+- `POST /retrieve`
+  - 多文档融合检索 + 重排序（简化版）
+- `POST /22239`
+  - 单文档融合检索（BM25 + 树检索）
+- `POST /fusion/22239`
+  - 单文档分层 + 融合检索 + 去重
+- `POST /fusion/retrieve`
+  - 多文档分层 + 融合检索 + 去重
+- `GET /hello`
+  - 健康检查
 
-Save the constructed tree to a specified path:
+返回示例：
 
-```python
-SAVE_PATH = "demo/cinderella"
-RA.save(SAVE_PATH)
-```
-
-Load the saved tree back into RAPTOR:
-
-```python
-RA = RetrievalAugmentation(tree=SAVE_PATH)
-answer = RA.answer_question(question=question)
-```
-
-
-### Extending RAPTOR with other Models
-
-RAPTOR is designed to be flexible and allows you to integrate any models for summarization, question-answering (QA), and embedding generation. Here is how to extend RAPTOR with your own models:
-
-#### Custom Summarization Model
-
-If you wish to use a different language model for summarization, you can do so by extending the `BaseSummarizationModel` class. Implement the `summarize` method to integrate your custom summarization logic:
-
-```python
-from raptor import BaseSummarizationModel
-
-class CustomSummarizationModel(BaseSummarizationModel):
-    def __init__(self):
-        # Initialize your model here
-        pass
-
-    def summarize(self, context, max_tokens=150):
-        # Implement your summarization logic here
-        # Return the summary as a string
-        summary = "Your summary here"
-        return summary
-```
-
-#### Custom QA Model
-
-For custom QA models, extend the `BaseQAModel` class and implement the `answer_question` method. This method should return the best answer found by your model given a context and a question:
-
-```python
-from raptor import BaseQAModel
-
-class CustomQAModel(BaseQAModel):
-    def __init__(self):
-        # Initialize your model here
-        pass
-
-    def answer_question(self, context, question):
-        # Implement your QA logic here
-        # Return the answer as a string
-        answer = "Your answer here"
-        return answer
-```
-
-#### Custom Embedding Model
-
-To use a different embedding model, extend the `BaseEmbeddingModel` class. Implement the `create_embedding` method, which should return a vector representation of the input text:
-
-```python
-from raptor import BaseEmbeddingModel
-
-class CustomEmbeddingModel(BaseEmbeddingModel):
-    def __init__(self):
-        # Initialize your model here
-        pass
-
-    def create_embedding(self, text):
-        # Implement your embedding logic here
-        # Return the embedding as a numpy array or a list of floats
-        embedding = [0.0] * embedding_dim  # Replace with actual embedding logic
-        return embedding
-```
-
-#### Integrating Custom Models with RAPTOR
-
-After implementing your custom models, integrate them with RAPTOR as follows:
-
-```python
-from raptor import RetrievalAugmentation, RetrievalAugmentationConfig
-
-# Initialize your custom models
-custom_summarizer = CustomSummarizationModel()
-custom_qa = CustomQAModel()
-custom_embedding = CustomEmbeddingModel()
-
-# Create a config with your custom models
-custom_config = RetrievalAugmentationConfig(
-    summarization_model=custom_summarizer,
-    qa_model=custom_qa,
-    embedding_model=custom_embedding
-)
-
-# Initialize RAPTOR with your custom config
-RA = RetrievalAugmentation(config=custom_config)
-```
-
-Check out `demo.ipynb` for examples on how to specify your own summarization/QA models, such as Llama/Mistral/Gemma, and Embedding Models such as SBERT, for use with RAPTOR.
-
-Note: More examples and ways to configure RAPTOR are forthcoming. Advanced usage and additional features will be provided in the documentation and repository updates.
-
-## Contributing
-
-RAPTOR is an open-source project, and contributions are welcome. Whether you're fixing bugs, adding new features, or improving documentation, your help is appreciated.
-
-## License
-
-RAPTOR is released under the MIT License. See the LICENSE file in the repository for full details.
-
-## Citation
-
-If RAPTOR assists in your research, please cite it as follows:
-
-```bibtex
-@inproceedings{sarthi2024raptor,
-    title={RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval},
-    author={Sarthi, Parth and Abdullah, Salman and Tuli, Aditi and Khanna, Shubh and Goldie, Anna and Manning, Christopher D.},
-    booktitle={International Conference on Learning Representations (ICLR)},
-    year={2024}
+```json
+{
+  "retriever": [
+    {"context": "...", "type": "leaf", "index": 12, "document": "..."}
+  ]
 }
 ```
 
-Stay tuned for more examples, configuration guides, and updates.
+## 模型与算法说明（简要）
+
+- 默认使用本地配置的 LLM/Embedding/Reranker 模型
+- 支持按目录/层级结构进行检索召回
+- 结合稀疏检索（BM25）与向量检索提高召回覆盖
+- 最终通过重排序进行结果精排
+
+## 目录结构（核心）
+
+```
+.
+├── app.py                  # FastAPI 服务入口
+├── config.py.example        # 模型配置模板
+├── demo/                    # 索引与示例数据
+├── example/                 # 自定义模型示例
+├── bm25.py                  # BM25 检索实现
+├── multi_doc.py             # 多文档检索逻辑
+└── requirements.txt
+```
+
+## 自定义扩展
+
+如需替换模型或自定义检索流程，可从 `example/` 中的实现入手，并在 `app.py` 中注入对应模型与配置。
+
+---
+
